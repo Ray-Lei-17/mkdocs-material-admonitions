@@ -1,4 +1,10 @@
-import { MarkdownRenderer, Plugin, TFile, type MarkdownPostProcessorContext } from "obsidian";
+import {
+  MarkdownRenderChild,
+  MarkdownRenderer,
+  Plugin,
+  TFile,
+  type MarkdownPostProcessorContext
+} from "obsidian";
 import MarkdownIt from "markdown-it";
 import type { RuleBlock } from "markdown-it";
 
@@ -63,7 +69,11 @@ function parseHeader(line: string): AdmonitionMeta | null {
   };
 }
 
-function extractContent(state: any, startLine: number, endLine: number): { content: string; endLine: number } | null {
+function extractContent(
+  state: MarkdownIt.StateBlock,
+  startLine: number,
+  endLine: number
+): { content: string; endLine: number } | null {
   const contentLines: string[] = [];
   let nextLine = startLine;
   let sawIndented = false;
@@ -174,6 +184,11 @@ export function registerMkdocsAdmonitions(md: MarkdownIt): void {
   renderAdmonition(md);
 }
 
+function createFragmentFromHtml(html: string): DocumentFragment {
+  const range = document.createRange();
+  return range.createContextualFragment(html);
+}
+
 export default class MkdocsMaterialAdmonitions extends Plugin {
   private fallbackMd: MarkdownIt | null = null;
 
@@ -227,14 +242,16 @@ export default class MkdocsMaterialAdmonitions extends Plugin {
       }
 
       const container = this.buildCalloutContainer(meta);
+      const renderChild = new MarkdownRenderChild(container.content);
+      this.addChild(renderChild);
       await MarkdownRenderer.render(
         this.app,
         extracted.contentLines.join("\n"),
         container.content,
         context.sourcePath,
-        this
+        renderChild
       );
-      element.innerHTML = "";
+      element.replaceChildren();
       element.appendChild(container.root);
       return;
     }
@@ -317,7 +334,7 @@ export default class MkdocsMaterialAdmonitions extends Plugin {
   }
 
   private findElementAtOrAfterLine(root: Element, line: number): Element | null {
-    const candidates = Array.from(root.querySelectorAll("[data-line]")) as Element[];
+    const candidates = Array.from(root.querySelectorAll("[data-line]"));
     let best: Element | null = null;
     let bestLine = Number.POSITIVE_INFINITY;
     for (const el of candidates) {
@@ -342,8 +359,7 @@ export default class MkdocsMaterialAdmonitions extends Plugin {
   }
 
   private replaceRangeWithHtml(root: Element, startEl: Element, endEl: Element | null, html: string): void {
-    const container = document.createElement("div");
-    container.innerHTML = html;
+    const fragment = createFragmentFromHtml(html);
 
     let node: Element | null = startEl;
     while (node && node !== endEl) {
@@ -352,15 +368,7 @@ export default class MkdocsMaterialAdmonitions extends Plugin {
       node = next;
     }
 
-    while (container.firstChild) {
-      root.insertBefore(container.firstChild, endEl);
-    }
-  }
-
-  private buildCalloutElement(meta: AdmonitionMeta, innerHtml: string): HTMLElement {
-    const container = this.buildCalloutContainer(meta);
-    container.content.innerHTML = innerHtml;
-    return container.root;
+    root.insertBefore(fragment, endEl);
   }
 
   private buildCalloutContainer(meta: AdmonitionMeta): { root: HTMLElement; content: HTMLElement } {
