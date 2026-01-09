@@ -1,0 +1,19 @@
+{
+  "name": "obsidian-mkdocs-material-admonitions",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Obsidian plugin to render MkDocs Material admonitions.",
+  "main": "main.js",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "dev": "node esbuild.config.mjs --watch",
+    "test": "node tests/render.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.19",
+    "esbuild": "^0.25.10",
+    "markdown-it": "^14.1.0",
+    "obsidian": "^1.5.7",
+    "typescript": "^5.4.2"
+  }
+}
