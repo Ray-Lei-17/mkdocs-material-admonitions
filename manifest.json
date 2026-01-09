@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "minAppVersion": "1.0.0",
   "description": "Render MkDocs Material admonition syntax in Reading view.",
-  "author": "Codex, Siqi Lei",
+  "author": "RayLei",
   "authorUrl": "https://ray-lei-17.github.io/",
   "isDesktopOnly": false
 }
