@@ -1,0 +1,2 @@
+!!! note "Unclosed
+    content

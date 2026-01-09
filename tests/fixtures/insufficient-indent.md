@@ -1,0 +1,2 @@
+!!! note "Indent"
+  Two spaces

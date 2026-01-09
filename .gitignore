@@ -8,5 +8,3 @@ dist/
 *.tsbuildinfo
 .env
 main.js
-tests/
-tests/*
