@@ -1,90 +1,47 @@
 import {
+  App,
   MarkdownRenderChild,
   MarkdownRenderer,
   Plugin,
+  PluginSettingTab,
+  Setting,
   TFile,
   type MarkdownPostProcessorContext
 } from "obsidian";
 import MarkdownIt from "markdown-it";
 import type { RuleBlock } from "markdown-it";
-
-const VALID_TYPES = new Set([
-  "note",
-  "info",
-  "tip",
-  "warning",
-  "important",
-  "caution",
-  "danger",
-  "bug",
-  "example",
-  "quote",
-  "failure",
-  "success",
-  "question"
-]);
-
-type AdmonitionMeta = {
-  calloutType: string;
-  title: string | null;
-  collapsible: boolean;
-  open: boolean;
-};
-
-function parseTitle(raw: string): string | null {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const first = trimmed[0];
-  if (first === '"' || first === "'") {
-    const end = trimmed.indexOf(first, 1);
-    if (end > 0) {
-      return trimmed.slice(1, end);
-    }
-    return trimmed.slice(1);
-  }
-  return trimmed;
-}
-
-function parseHeader(line: string): AdmonitionMeta | null {
-  const match = line.match(/^(!!!|\?\?\?\+?)\s+([A-Za-z][\w-]*)(.*)?$/);
-  if (!match) {
-    return null;
-  }
-
-  const marker = match[1];
-  const rawType = match[2].toLowerCase();
-  const title = parseTitle(match[3] ?? "");
-
-  const calloutType = VALID_TYPES.has(rawType) ? rawType : "note";
-  const collapsible = marker.startsWith("???");
-  const open = marker === "???+" || marker === "!!!";
-
-  return {
-    calloutType,
-    title,
-    collapsible,
-    open
-  };
-}
+import {
+  buildCalloutContainer,
+  extractContentFromLines,
+  parseHeader,
+  type AdmonitionMeta,
+  type AdmonitionParseOptions
+} from "./admonition";
+import { livePreviewExtension } from "./live-preview";
 
 function extractContent(
   state: MarkdownIt.StateBlock,
   startLine: number,
-  endLine: number
+  endLine: number,
+  options: AdmonitionParseOptions = {}
 ): { content: string; endLine: number } | null {
   const contentLines: string[] = [];
   let nextLine = startLine;
   let sawIndented = false;
+  let emptyRun = 0;
 
   while (nextLine < endLine) {
     if (state.isEmpty(nextLine)) {
+      emptyRun += 1;
+      if (options.endOnDoubleBlank && emptyRun >= 2) {
+        break;
+      }
       contentLines.push("");
       nextLine += 1;
       continue;
     }
 
+    emptyRun = 0;
     const indent = state.sCount[nextLine] - state.blkIndent;
     if (indent < 4) {
       break;
@@ -119,7 +76,7 @@ function extractContent(
   };
 }
 
-function mkdocsAdmonitionRule(md: MarkdownIt): RuleBlock {
+function mkdocsAdmonitionRule(md: MarkdownIt, options: AdmonitionParseOptions): RuleBlock {
   return (state, startLine, endLine, silent) => {
     const start = state.bMarks[startLine] + state.tShift[startLine];
     const max = state.eMarks[startLine];
@@ -141,7 +98,7 @@ function mkdocsAdmonitionRule(md: MarkdownIt): RuleBlock {
       return true;
     }
 
-    const extracted = extractContent(state, startLine + 1, endLine);
+    const extracted = extractContent(state, startLine + 1, endLine, options);
     if (!extracted) {
       return false;
     }
@@ -177,8 +134,8 @@ function renderAdmonition(md: MarkdownIt): void {
   };
 }
 
-export function registerMkdocsAdmonitions(md: MarkdownIt): void {
-  md.block.ruler.before("fence", "mkdocs_admonition", mkdocsAdmonitionRule(md), {
+export function registerMkdocsAdmonitions(md: MarkdownIt, options: AdmonitionParseOptions = {}): void {
+  md.block.ruler.before("fence", "mkdocs_admonition", mkdocsAdmonitionRule(md, options), {
     alt: ["paragraph", "reference", "blockquote", "list"]
   });
   renderAdmonition(md);
@@ -191,21 +148,23 @@ function createFragmentFromHtml(html: string): DocumentFragment {
 
 export default class MkdocsMaterialAdmonitions extends Plugin {
   private fallbackMd: MarkdownIt | null = null;
+  settings: MkdocsMaterialAdmonitionsSettings = DEFAULT_SETTINGS;
 
-  onload(): void {
-    const registerMarkdownIt = (this as unknown as { registerMarkdownIt?: (cb: (md: MarkdownIt) => void) => void }).registerMarkdownIt;
-    if (typeof registerMarkdownIt === "function") {
-      registerMarkdownIt((md) => {
-        registerMkdocsAdmonitions(md);
-      });
-      return;
+  async onload(): Promise<void> {
+    await this.loadSettings();
+    try {
+      this.registerEditorExtension(livePreviewExtension(this.app, this, () => this.getLivePreviewOptions()));
+    } catch (error) {
+      console.error("mkdocs live preview extension failed", error);
     }
 
     this.fallbackMd = new MarkdownIt({ html: true, linkify: true });
-    registerMkdocsAdmonitions(this.fallbackMd);
+    registerMkdocsAdmonitions(this.fallbackMd, this.getParseOptions());
     this.registerMarkdownPostProcessor(async (element, context) => {
       await this.processFallback(element, context);
     });
+
+    this.addSettingTab(new MkdocsMaterialAdmonitionsSettingTab(this.app, this));
   }
 
   private async processFallback(element: HTMLElement, context: MarkdownPostProcessorContext): Promise<void> {
@@ -236,7 +195,7 @@ export default class MkdocsMaterialAdmonitions extends Plugin {
         return;
       }
 
-      const extracted = this.extractContentFromLines(lines, startLine + 1);
+      const extracted = extractContentFromLines(lines, startLine + 1, this.getParseOptions());
       if (!extracted) {
         return;
       }
@@ -264,7 +223,7 @@ export default class MkdocsMaterialAdmonitions extends Plugin {
         continue;
       }
 
-      const extracted = this.extractContentFromLines(lines, line + 1);
+      const extracted = extractContentFromLines(lines, line + 1, this.getParseOptions());
       if (!extracted) {
         line += 1;
         continue;
@@ -287,43 +246,6 @@ export default class MkdocsMaterialAdmonitions extends Plugin {
 
       line = extracted.endLine;
     }
-  }
-
-  private extractContentFromLines(lines: string[], startLine: number): { contentLines: string[]; endLine: number } | null {
-    const contentLines: string[] = [];
-    let line = startLine;
-    let sawIndented = false;
-
-    while (line < lines.length) {
-      const text = lines[line] ?? "";
-      if (!text) {
-        contentLines.push("");
-        line += 1;
-        continue;
-      }
-
-      if (text.startsWith("\t")) {
-        sawIndented = true;
-        contentLines.push(text.slice(1));
-        line += 1;
-        continue;
-      }
-
-      if (text.startsWith("    ")) {
-        sawIndented = true;
-        contentLines.push(text.slice(4));
-        line += 1;
-        continue;
-      }
-
-      break;
-    }
-
-    if (!sawIndented) {
-      return null;
-    }
-
-    return { contentLines, endLine: line };
   }
 
   private findElementByLine(root: Element, line: number): Element | null {
@@ -372,35 +294,72 @@ export default class MkdocsMaterialAdmonitions extends Plugin {
   }
 
   private buildCalloutContainer(meta: AdmonitionMeta): { root: HTMLElement; content: HTMLElement } {
-    const container = document.createElement(meta.collapsible ? "details" : "div");
-    container.className = "callout mkdocs-admonition";
-    container.setAttribute("data-callout", meta.calloutType);
-    if (meta.collapsible && meta.open) {
-      container.setAttribute("open", "");
-    }
+    return buildCalloutContainer(meta);
+  }
 
-    if (meta.collapsible) {
-      const summary = document.createElement("summary");
-      summary.className = "callout-title";
-      const inner = document.createElement("span");
-      inner.className = "callout-title-inner";
-      inner.textContent = meta.title ?? "";
-      summary.appendChild(inner);
-      container.appendChild(summary);
-    } else if (meta.title) {
-      const title = document.createElement("div");
-      title.className = "callout-title";
-      const inner = document.createElement("div");
-      inner.className = "callout-title-inner";
-      inner.textContent = meta.title;
-      title.appendChild(inner);
-      container.appendChild(title);
-    }
+  private getParseOptions(): AdmonitionParseOptions {
+    return {
+      endOnDoubleBlank: this.settings.endOnDoubleBlank
+    };
+  }
 
-    const content = document.createElement("div");
-    content.className = "callout-content";
-    container.appendChild(content);
+  private getLivePreviewOptions(): { endOnDoubleBlank: boolean; enabled: boolean } {
+    return {
+      endOnDoubleBlank: this.settings.endOnDoubleBlank,
+      enabled: this.settings.livePreviewEnabled
+    };
+  }
 
-    return { root: container, content };
+  private async loadSettings(): Promise<void> {
+    const data = (await this.loadData()) as Partial<MkdocsMaterialAdmonitionsSettings> | null;
+    this.settings = { ...DEFAULT_SETTINGS, ...data };
+  }
+
+  private async saveSettings(): Promise<void> {
+    await this.saveData(this.settings);
+  }
+}
+
+type MkdocsMaterialAdmonitionsSettings = {
+  endOnDoubleBlank: boolean;
+  livePreviewEnabled: boolean;
+};
+
+const DEFAULT_SETTINGS: MkdocsMaterialAdmonitionsSettings = {
+  endOnDoubleBlank: true,
+  livePreviewEnabled: true
+};
+
+class MkdocsMaterialAdmonitionsSettingTab extends PluginSettingTab {
+  private plugin: MkdocsMaterialAdmonitions;
+
+  constructor(app: App, plugin: MkdocsMaterialAdmonitions) {
+    super(app, plugin);
+    this.plugin = plugin;
+  }
+
+  display(): void {
+    const { containerEl } = this;
+    containerEl.empty();
+
+    new Setting(containerEl)
+      .setName("Double blank line ends admonition")
+      .setDesc("When enabled, two consecutive empty lines end an admonition block.")
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.endOnDoubleBlank).onChange(async (value) => {
+          this.plugin.settings.endOnDoubleBlank = value;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Enable Live Preview rendering")
+      .setDesc("When disabled, Live Preview will show the source text for MkDocs admonitions.")
+      .addToggle((toggle) => {
+        toggle.setValue(this.plugin.settings.livePreviewEnabled).onChange(async (value) => {
+          this.plugin.settings.livePreviewEnabled = value;
+          await this.plugin.saveSettings();
+        });
+      });
   }
 }

@@ -10,7 +10,20 @@ const context = await esbuild.context({
   target: "es2018",
   platform: "browser",
   outfile: "main.js",
-  external: ["obsidian"],
+  external: [
+    "obsidian",
+    "@codemirror/state",
+    "@codemirror/view",
+    "@codemirror/language",
+    "@codemirror/commands",
+    "@codemirror/search",
+    "@codemirror/autocomplete",
+    "codemirror",
+    "@lezer/common",
+    "@lezer/highlight",
+    "@lezer/lr",
+  ],
+  // external: ["obsidian", "@codemirror/state", "@codemirror/view"],
   sourcemap: "inline"
 });
 

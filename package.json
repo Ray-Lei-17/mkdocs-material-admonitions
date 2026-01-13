@@ -10,6 +10,8 @@
     "test": "node tests/render.mjs"
   },
   "devDependencies": {
+    "@codemirror/state": "^6.4.1",
+    "@codemirror/view": "^6.26.3",
     "@types/node": "^20.11.19",
     "esbuild": "^0.25.10",
     "markdown-it": "^14.1.0",

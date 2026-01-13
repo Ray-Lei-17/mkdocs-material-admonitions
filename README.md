@@ -2,6 +2,10 @@
 
 Render MkDocs Material admonition syntax in Obsidian Reading view using a markdown-it block rule.
 
+## Compatibility
+
+- Obsidian version tested: v1.11.4.
+
 ## Syntax
 
 ```md
@@ -28,12 +32,24 @@ Render MkDocs Material admonition syntax in Obsidian Reading view using a markdo
 
 - Uses Obsidian callout DOM: `.callout`, `data-callout`, `.callout-title`, `.callout-content`.
 - Collapsible admonitions render as `<details>` with `<summary>`.
+- Live Preview uses a CodeMirror extension; when the cursor is inside an admonition block, the source text is shown so you can edit it.
+
+## Settings
+
+- **Double blank line ends admonition** (default: on)  
+  When enabled, two consecutive empty lines end an admonition block. This affects Reading view, Live Preview, and the fallback post-processor.
 
 ## Limitations
 
-- Live Preview is not handled in v1. Reading view is stable.
+- Live Preview renders via a CodeMirror extension; editing inside rendered blocks may feel different than source mode.
+- Live Preview spacing can appear wider than Reading view depending on theme/CM6 layout.
+
+## Live Preview
+
+- You can disable Live Preview rendering in Settings → “Enable Live Preview rendering”.
+  When disabled, MkDocs admonitions show as source text in Live Preview.
 - Title parsing is conservative; quoted titles are recommended.
-- If your Obsidian version lacks `registerMarkdownIt`, the plugin falls back to a post-processor using source sections. In that mode, nested MkDocs admonitions are not parsed, but Obsidian math/markdown extensions still render.
+- The plugin uses a post-processor in Reading view; nested MkDocs admonitions are not parsed, but Obsidian math/markdown extensions still render.
 
 ## Build
 
