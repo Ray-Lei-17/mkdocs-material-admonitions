@@ -353,8 +353,8 @@ class MkdocsMaterialAdmonitionsSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("Enable Live Preview rendering")
-      .setDesc("When disabled, Live Preview will show the source text for MkDocs admonitions.")
+      .setName("Enable live preview rendering")
+      .setDesc("When disabled, live preview will show the source text for MkDocs admonitions.")
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.livePreviewEnabled).onChange(async (value) => {
           this.plugin.settings.livePreviewEnabled = value;
