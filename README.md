@@ -43,6 +43,7 @@ Render MkDocs Material admonition syntax in Obsidian Reading view using a markdo
 
 - Live Preview renders via a CodeMirror extension; editing inside rendered blocks may feel different than source mode.
 - Live Preview spacing can appear wider than Reading view depending on theme/CM6 layout.
+- In Reading view, Markdown treats indented blocks as code; in some cases this can leave an extra code block after an admonition.
 
 ## Live Preview
 
